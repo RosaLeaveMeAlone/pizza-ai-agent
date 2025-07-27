@@ -1,5 +1,5 @@
 from langchain_openai import ChatOpenAI
-from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate
+from langchain.prompts import ChatPromptTemplate, SystemMessagePromptTemplate, HumanMessagePromptTemplate, MessagesPlaceholder
 from langchain.schema import BaseOutputParser
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationChain
@@ -129,7 +129,7 @@ FORMATO DE RESPUESTA:
         if call_sid not in self.memories:
             self.memories[call_sid] = ConversationBufferMemory(
                 return_messages=True,
-                memory_key="chat_history"
+                memory_key="history"
             )
         return self.memories[call_sid]
     
@@ -159,6 +159,7 @@ FORMATO DE RESPUESTA:
             
             prompt = ChatPromptTemplate.from_messages([
                 SystemMessagePromptTemplate.from_template(system_prompt),
+                MessagesPlaceholder(variable_name="history"),
                 HumanMessagePromptTemplate.from_template("{input}")
             ])
             
