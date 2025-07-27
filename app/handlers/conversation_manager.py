@@ -42,8 +42,11 @@ class ConversationManager:
                 call_sid
             )
             
+            # Preserve the catalog when recreating context
+            catalog = context.catalog
             context = ConversationContext.from_dict(ai_result["context"])
             context.call_sid = call_sid
+            context.catalog = catalog
             self.active_conversations[call_sid] = context
             
             return await self._execute_action(context, ai_result)
