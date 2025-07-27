@@ -174,22 +174,51 @@ class ConversationManager:
         response_text = ai_result["response_text"]
         
         # Parse customer info from the message
-        customer_message = context.last_customer_message
+        customer_message = context.last_customer_message.strip()
+        
+        logger.info(f"Collecting info - Current state: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
+        logger.info(f"Customer message: '{customer_message}'")
         
         if not context.customer_info.name:
-            if any(word in customer_message.lower() for word in ["me llamo", "soy", "mi nombre"]):
+            # Extract name more intelligently
+            if any(phrase in customer_message.lower() for phrase in ["me llamo", "soy", "mi nombre es"]):
+                # Extract just the name part
+                parts = customer_message.lower().split()
+                name_index = 0
+                if "llamo" in customer_message.lower():
+                    name_index = parts.index("llamo") + 1
+                elif "soy" in customer_message.lower():
+                    name_index = parts.index("soy") + 1
+                elif "es" in customer_message.lower():
+                    name_index = parts.index("es") + 1
+                
+                if name_index < len(parts):
+                    name = " ".join(customer_message.split()[name_index:]).strip()
+                    context.customer_info.name = name
+                    logger.info(f"Extracted name: '{name}'")
+                    response_text = "Gracias. ¿Cuál es tu número de teléfono?"
+                else:
+                    response_text = "No pude entender tu nombre. ¿Puedes repetirlo?"
+            else:
+                # Assume the whole message is the name if no special phrases
                 context.customer_info.name = customer_message
+                logger.info(f"Assumed whole message as name: '{customer_message}'")
                 response_text = "Gracias. ¿Cuál es tu número de teléfono?"
         
         elif not context.customer_info.phone:
             import re
-            phone_match = re.search(r'\d{9,10}', customer_message)
+            # Look for phone numbers (allow more flexibility)
+            phone_match = re.search(r'\d{8,11}', customer_message.replace(" ", "").replace("-", ""))
             if phone_match:
                 context.customer_info.phone = phone_match.group()
+                logger.info(f"Extracted phone: '{context.customer_info.phone}'")
                 response_text = "Perfecto. ¿Cuál es tu dirección de entrega?"
+            else:
+                response_text = "No pude entender tu teléfono. ¿Puedes repetir el número?"
         
         elif not context.customer_info.address:
             context.customer_info.address = customer_message
+            logger.info(f"Extracted address: '{customer_message}'")
             response_text = "Excelente. Voy a confirmar tu pedido."
             context.update_state(ConversationState.CREATING_ORDER)
         
