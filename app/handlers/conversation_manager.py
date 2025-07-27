@@ -4,13 +4,22 @@ from app.models.conversation import ConversationContext, ConversationState, Cust
 from app.services.langchain_service import langchain_service
 from app.services.pizza_api_service import pizza_api
 from app.services.polly_service import polly_service
-from app.services.customer_info_extractor import customer_info_extractor
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from app.config.settings import settings
+import json
 
 class ConversationManager:
     """Manages conversation flow and state"""
     
     def __init__(self):
         self.active_conversations: Dict[str, ConversationContext] = {}
+        self.extractor_llm = ChatOpenAI(
+            model_name="gpt-4",
+            temperature=0.1,
+            max_tokens=300,
+            openai_api_key=settings.openai_api_key
+        )
     
     async def process_customer_message(
         self, 
@@ -208,6 +217,47 @@ class ConversationManager:
             logger.error(f"Error getting cart summary: {str(e)}")
             return "No pude revisar tu carrito."
     
+    async def _extract_customer_info_ai(self, message: str) -> Dict[str, Optional[str]]:
+        """Extract customer information using AI"""
+        try:
+            prompt = ChatPromptTemplate.from_template("""
+You are an expert at extracting customer information from Spanish voice messages for pizza delivery orders.
+
+Customer message: "{message}"
+
+Extract information from this message. Common Spanish patterns:
+- Names: "mi nombre es", "me llamo", "soy"
+- Phone: "mi número es", "mi teléfono es", numbers like "555 120 12"
+- Address: "mi dirección es", "vivo en", "calle", street addresses
+
+Return ONLY a JSON object:
+{{
+    "name": "extracted name or null",
+    "phone": "extracted phone (digits only) or null", 
+    "address": "extracted address or null"
+}}
+
+Important: Extract ALL digits from phone numbers regardless of spaces.
+""")
+            
+            response = await self.extractor_llm.apredict(prompt.format(message=message))
+            logger.info(f"[AI_EXTRACTOR] Raw response: {response}")
+            
+            # Parse JSON response
+            if response.strip().startswith('{'):
+                data = json.loads(response.strip())
+                return {
+                    "name": data.get("name"),
+                    "phone": data.get("phone"), 
+                    "address": data.get("address")
+                }
+            
+            return {"name": None, "phone": None, "address": None}
+            
+        except Exception as e:
+            logger.error(f"Error in AI extraction: {str(e)}")
+            return {"name": None, "phone": None, "address": None}
+    
     async def _collect_customer_info(self, context: ConversationContext, ai_result: Dict) -> Dict[str, str]:
         """Collect customer information using AI extraction"""
         response_text = ai_result["response_text"]
@@ -219,12 +269,7 @@ class ConversationManager:
         logger.info(f"[COLLECT_INFO] Customer message: '{customer_message}'")
         
         # Use AI to extract customer information
-        extracted_info = await customer_info_extractor.extract_customer_info(
-            message=customer_message,
-            current_name=context.customer_info.name,
-            current_phone=context.customer_info.phone,
-            current_address=context.customer_info.address
-        )
+        extracted_info = await self._extract_customer_info_ai(customer_message)
         
         # Update context with extracted information (only if not already present)
         if not context.customer_info.name and extracted_info.get("name"):
