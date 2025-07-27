@@ -126,15 +126,27 @@ class ConversationManager:
             pizza_size_id = None
             
             # Handle pizza size
-            if size_name and "precios_por_tamaño" in product:
+            if size_name and "prices_by_size" in product:
                 pizza_sizes = await pizza_api.get_pizza_sizes(context.catalog)
                 for size in pizza_sizes:
                     if size_name.lower() in size["name"].lower():
-                        pizza_size_id = size.get("id")  # We'll need to add ID to catalog
+                        pizza_size_id = size.get("id")
                         break
             
-            logger.info(f"Would add: {product_name} (size: {size_name}, qty: {quantity})")
-            return True
+            # Actually add the product to cart
+            success = await pizza_api.add_product_to_cart(
+                cart_token=context.cart_token,
+                product_id=product_id,
+                quantity=quantity,
+                pizza_size_id=pizza_size_id
+            )
+            
+            if success:
+                logger.info(f"Successfully added: {product_name} (id: {product_id}, size_id: {pizza_size_id}, qty: {quantity})")
+                return True
+            else:
+                logger.error(f"Failed to add product {product_name} to cart")
+                return False
             
         except Exception as e:
             logger.error(f"Error adding product to cart: {str(e)}")

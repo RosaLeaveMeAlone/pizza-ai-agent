@@ -30,8 +30,11 @@ class PizzaAPIService:
     async def create_cart(self) -> Optional[Dict]:
         """Create a new shopping cart"""
         try:
+            logger.info(f"Creating cart - POST {self.api_base}/cart/create")
             async with httpx.AsyncClient() as client:
                 response = await client.post(f"{self.api_base}/cart/create")
+                
+                logger.info(f"Create cart response - Status: {response.status_code}, Body: {response.text}")
                 
                 if response.status_code == 201:
                     result = response.json()
@@ -64,11 +67,15 @@ class PizzaAPIService:
             if pizza_size_id:
                 payload["pizza_size_id"] = pizza_size_id
             
+            logger.info(f"Adding product to cart - POST {self.api_base}/cart/add-product with payload: {payload}")
+            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.api_base}/cart/add-product",
                     json=payload
                 )
+                
+                logger.info(f"Add product response - Status: {response.status_code}, Body: {response.text}")
                 
                 if response.status_code == 200:
                     logger.info(f"Added product {product_id} to cart {cart_token}")
@@ -84,8 +91,11 @@ class PizzaAPIService:
     async def get_cart(self, cart_token: str) -> Optional[Dict]:
         """Get cart contents"""
         try:
+            logger.info(f"Getting cart - GET {self.api_base}/cart/{cart_token}")
             async with httpx.AsyncClient() as client:
                 response = await client.get(f"{self.api_base}/cart/{cart_token}")
+                
+                logger.info(f"Get cart response - Status: {response.status_code}, Body: {response.text}")
                 
                 if response.status_code == 200:
                     logger.info(f"Retrieved cart {cart_token}")
@@ -116,20 +126,25 @@ class PizzaAPIService:
                 "payment_method": payment_method
             }
             
+            logger.info(f"Creating order - POST {self.api_base}/orders with payload: {payload}")
+            
             async with httpx.AsyncClient() as client:
                 response = await client.post(
                     f"{self.api_base}/orders",
                     json=payload
                 )
                 
+                logger.info(f"Create order response - Status: {response.status_code}, Body: {response.text}")
+                
                 if response.status_code == 201:
                     result = response.json()
                     order_id = result['data']['id']
                     view_url = result.get('view_url', '')
                     logger.info(f"Created order {order_id} with URL: {view_url}")
+                    logger.info(f"Full order creation response: {result}")
                     return result
                 else:
-                    logger.error(f"Failed to create order: {response.status_code}")
+                    logger.error(f"Failed to create order: {response.status_code} - Response: {response.text}")
                     return None
                     
         except Exception as e:
@@ -139,6 +154,10 @@ class PizzaAPIService:
     async def find_product_by_name(self, product_name: str, catalog: Dict) -> Optional[Dict]:
         """Find product in catalog by name (fuzzy matching)"""
         try:
+            if not catalog:
+                logger.error("Catalog is None")
+                return None
+            
             products = catalog.get('data', {}).get('products', [])
             
             for product in products:
