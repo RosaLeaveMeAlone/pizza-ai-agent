@@ -174,6 +174,7 @@ FORMATO DE RESPUESTA:
             logger.info(f"Langchain response: {response}")
             
             parsed_result = self.parser.parse(response)
+            logger.info(f"Parsed result: {parsed_result}")
             
             updated_context = conversation_context.copy()
             if "conversation_history" not in updated_context:

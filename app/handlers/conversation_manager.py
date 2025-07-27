@@ -72,6 +72,8 @@ class ConversationManager:
         action = ai_result["action"]
         response_text = ai_result["response_text"]
         
+        logger.info(f"Executing action: {action} with ai_result: {ai_result}")
+        
         if action == "welcome":
             context.update_state(ConversationState.TAKING_ORDER)
             return await self._voice_response(response_text)
