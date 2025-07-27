@@ -4,6 +4,7 @@ from app.models.conversation import ConversationContext, ConversationState, Cust
 from app.services.langchain_service import langchain_service
 from app.services.pizza_api_service import pizza_api
 from app.services.polly_service import polly_service
+from app.services.customer_info_extractor import customer_info_extractor
 
 class ConversationManager:
     """Manages conversation flow and state"""
@@ -208,61 +209,41 @@ class ConversationManager:
             return "No pude revisar tu carrito."
     
     async def _collect_customer_info(self, context: ConversationContext, ai_result: Dict) -> Dict[str, str]:
-        """Collect customer information step by step"""
+        """Collect customer information using AI extraction"""
         response_text = ai_result["response_text"]
         
-        # Parse customer info from the message
+        # Parse customer info from the message using AI
         customer_message = context.last_customer_message.strip()
         
         logger.info(f"[COLLECT_INFO] Current state: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
         logger.info(f"[COLLECT_INFO] Customer message: '{customer_message}'")
         
-        import re
+        # Use AI to extract customer information
+        extracted_info = await customer_info_extractor.extract_customer_info(
+            message=customer_message,
+            current_name=context.customer_info.name,
+            current_phone=context.customer_info.phone,
+            current_address=context.customer_info.address
+        )
         
-        # Simple and direct extraction
-        message_lower = customer_message.lower()
+        # Update context with extracted information (only if not already present)
+        if not context.customer_info.name and extracted_info.get("name"):
+            context.customer_info.name = extracted_info["name"]
+            logger.info(f"[COLLECT_INFO] AI extracted name: '{extracted_info['name']}'")
         
-        # Extract name - look for common patterns
-        if not context.customer_info.name:
-            if "mi nombre es" in message_lower:
-                name_part = customer_message.split("mi nombre es", 1)[1].split(",")[0].split(" y ")[0].strip()
-                context.customer_info.name = name_part
-                logger.info(f"[COLLECT_INFO] Extracted name: '{name_part}'")
-            elif "me llamo" in message_lower:
-                name_part = customer_message.split("me llamo", 1)[1].split(",")[0].split(" y ")[0].strip()
-                context.customer_info.name = name_part
-                logger.info(f"[COLLECT_INFO] Extracted name: '{name_part}'")
-            elif "soy" in message_lower:
-                name_part = customer_message.split("soy", 1)[1].split(",")[0].split(" y ")[0].strip()
-                context.customer_info.name = name_part
-                logger.info(f"[COLLECT_INFO] Extracted name: '{name_part}'")
+        if not context.customer_info.phone and extracted_info.get("phone"):
+            # Clean phone number to digits only
+            phone = ''.join(filter(str.isdigit, extracted_info["phone"]))
+            if len(phone) >= 7:  # Valid phone number
+                context.customer_info.phone = phone
+                logger.info(f"[COLLECT_INFO] AI extracted phone: '{phone}'")
         
-        # Extract phone - look for numbers
-        if not context.customer_info.phone:
-            # Look for phone number patterns
-            phone_match = re.search(r'(\d{3}\s*\d{2}\s*\d{2}|\d{7,11})', customer_message)
-            if phone_match:
-                phone = re.sub(r'[^\d]', '', phone_match.group(1))
-                if len(phone) >= 7:
-                    context.customer_info.phone = phone
-                    logger.info(f"[COLLECT_INFO] Extracted phone: '{phone}'")
-        
-        # Extract address - look for address patterns
-        if not context.customer_info.address:
-            if "dirección" in message_lower:
-                address_part = customer_message.split("dirección", 1)[1].replace("es", "", 1).replace(":", "", 1).strip()
-                if address_part:
-                    context.customer_info.address = address_part
-                    logger.info(f"[COLLECT_INFO] Extracted address: '{address_part}'")
-            elif "calle" in message_lower:
-                # Find "calle" and take everything after it
-                calle_index = message_lower.find("calle")
-                address_part = customer_message[calle_index:].strip()
-                context.customer_info.address = address_part
-                logger.info(f"[COLLECT_INFO] Extracted address: '{address_part}'")
+        if not context.customer_info.address and extracted_info.get("address"):
+            context.customer_info.address = extracted_info["address"]
+            logger.info(f"[COLLECT_INFO] AI extracted address: '{extracted_info['address']}'")
         
         # Log current state after extraction
-        logger.info(f"[COLLECT_INFO] After extraction: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
+        logger.info(f"[COLLECT_INFO] After AI extraction: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
         
         # Check if we have all information
         if context.customer_info.name and context.customer_info.phone and context.customer_info.address:
