@@ -129,7 +129,7 @@ FORMATO DE RESPUESTA:
         if call_sid not in self.memories:
             self.memories[call_sid] = ConversationBufferMemory(
                 return_messages=True,
-                memory_key="history"
+                memory_key="chat_history"
             )
         return self.memories[call_sid]
     
@@ -159,7 +159,7 @@ FORMATO DE RESPUESTA:
             
             prompt = ChatPromptTemplate.from_messages([
                 SystemMessagePromptTemplate.from_template(system_prompt),
-                MessagesPlaceholder(variable_name="history"),
+                MessagesPlaceholder(variable_name="chat_history"),
                 HumanMessagePromptTemplate.from_template("{input}")
             ])
             
