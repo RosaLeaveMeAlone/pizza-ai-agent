@@ -100,7 +100,24 @@ class ConversationManager:
             return await self._collect_customer_info(context, ai_result)
         
         elif action == "create_order":
-            return await self._create_order(context)
+            # If customer info is incomplete, try to extract from the current message first
+            if not context.is_customer_info_complete():
+                logger.info(f"[CREATE_ORDER] Customer info incomplete, trying to extract from message: '{context.last_customer_message}'")
+                
+                # Temporarily switch to collecting info mode and extract data
+                temp_ai_result = {"response_text": "Extrayendo información..."}
+                temp_response = await self._collect_customer_info(context, temp_ai_result)
+                
+                # Check if we now have complete info
+                if context.is_customer_info_complete():
+                    logger.info(f"[CREATE_ORDER] Info extracted successfully, proceeding with order")
+                    return await self._create_order(context)
+                else:
+                    logger.info(f"[CREATE_ORDER] Still missing info, asking for it")
+                    context.update_state(ConversationState.COLLECTING_INFO)
+                    return temp_response
+            else:
+                return await self._create_order(context)
         
         elif action == "clarification":
             # If we're collecting info, handle it as customer info collection
