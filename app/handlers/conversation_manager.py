@@ -197,88 +197,83 @@ class ConversationManager:
         # Parse customer info from the message
         customer_message = context.last_customer_message.strip()
         
-        logger.info(f"Collecting info - Current state: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
-        logger.info(f"Customer message: '{customer_message}'")
+        logger.info(f"[COLLECT_INFO] Current state: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
+        logger.info(f"[COLLECT_INFO] Customer message: '{customer_message}'")
         
-        # Try to extract all info at once from the message
         import re
         
-        # Extract name patterns
-        name_patterns = [
-            r"mi nombre es\s+([^,]+)",
-            r"me llamo\s+([^,]+)", 
-            r"soy\s+([^,]+)",
-            r"nombre:?\s*([^,]+)"
-        ]
-        
-        # Extract phone patterns
-        phone_patterns = [
-            r"teléfono:?\s*(?:es\s*)?(\d[\d\s-]{7,15})",
-            r"número:?\s*(?:es\s*)?(\d[\d\s-]{7,15})",
-            r"(\d[\d\s-]{8,15})"
-        ]
-        
-        # Extract address patterns
-        address_patterns = [
-            r"dirección:?\s*(?:es\s*)?(.+?)(?:\.|$)",
-            r"entrega:?\s*(?:es\s*)?(.+?)(?:\.|$)",
-            r"calle\s+(.+?)(?:\.|$)"
-        ]
-        
-        # Extract information from current message
+        # Simple and direct extraction
         message_lower = customer_message.lower()
         
-        # Extract name
+        # Extract name - look for common patterns
         if not context.customer_info.name:
-            for pattern in name_patterns:
-                match = re.search(pattern, message_lower)
-                if match:
-                    name = match.group(1).strip().title()
-                    context.customer_info.name = name
-                    logger.info(f"Extracted name: '{name}'")
-                    break
+            if "mi nombre es" in message_lower:
+                name_part = customer_message.split("mi nombre es", 1)[1].split(",")[0].split(" y ")[0].strip()
+                context.customer_info.name = name_part
+                logger.info(f"[COLLECT_INFO] Extracted name: '{name_part}'")
+            elif "me llamo" in message_lower:
+                name_part = customer_message.split("me llamo", 1)[1].split(",")[0].split(" y ")[0].strip()
+                context.customer_info.name = name_part
+                logger.info(f"[COLLECT_INFO] Extracted name: '{name_part}'")
+            elif "soy" in message_lower:
+                name_part = customer_message.split("soy", 1)[1].split(",")[0].split(" y ")[0].strip()
+                context.customer_info.name = name_part
+                logger.info(f"[COLLECT_INFO] Extracted name: '{name_part}'")
         
-        # Extract phone
+        # Extract phone - look for numbers
         if not context.customer_info.phone:
-            for pattern in phone_patterns:
-                match = re.search(pattern, customer_message.replace(" ", "").replace("-", ""))
-                if match:
-                    phone = re.sub(r'[^\d]', '', match.group(1))
-                    if len(phone) >= 8:
-                        context.customer_info.phone = phone
-                        logger.info(f"Extracted phone: '{phone}'")
-                        break
+            # Look for phone number patterns
+            phone_match = re.search(r'(\d{3}\s*\d{2}\s*\d{2}|\d{7,11})', customer_message)
+            if phone_match:
+                phone = re.sub(r'[^\d]', '', phone_match.group(1))
+                if len(phone) >= 7:
+                    context.customer_info.phone = phone
+                    logger.info(f"[COLLECT_INFO] Extracted phone: '{phone}'")
         
-        # Extract address
+        # Extract address - look for address patterns
         if not context.customer_info.address:
-            for pattern in address_patterns:
-                match = re.search(pattern, message_lower)
-                if match:
-                    address = match.group(1).strip().title()
-                    context.customer_info.address = address
-                    logger.info(f"Extracted address: '{address}'")
-                    break
+            if "dirección" in message_lower:
+                address_part = customer_message.split("dirección", 1)[1].replace("es", "", 1).replace(":", "", 1).strip()
+                if address_part:
+                    context.customer_info.address = address_part
+                    logger.info(f"[COLLECT_INFO] Extracted address: '{address_part}'")
+            elif "calle" in message_lower:
+                # Find "calle" and take everything after it
+                calle_index = message_lower.find("calle")
+                address_part = customer_message[calle_index:].strip()
+                context.customer_info.address = address_part
+                logger.info(f"[COLLECT_INFO] Extracted address: '{address_part}'")
         
-        # Determine next step based on what's missing
-        if not context.customer_info.name:
+        # Log current state after extraction
+        logger.info(f"[COLLECT_INFO] After extraction: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
+        
+        # Check if we have all information
+        if context.customer_info.name and context.customer_info.phone and context.customer_info.address:
+            logger.info(f"[COLLECT_INFO] All info collected! Moving to order creation.")
+            response_text = "Perfecto. Tengo toda tu información. Voy a procesar tu pedido."
+            context.update_state(ConversationState.CREATING_ORDER)
+        elif not context.customer_info.name:
             response_text = "Por favor, dime tu nombre."
         elif not context.customer_info.phone:
             response_text = "¿Cuál es tu número de teléfono?"
         elif not context.customer_info.address:
             response_text = "¿Cuál es tu dirección de entrega?"
-        else:
-            # All info collected, move to order creation
-            response_text = "Perfecto. Tengo toda tu información. Voy a procesar tu pedido."
-            context.update_state(ConversationState.CREATING_ORDER)
         
+        logger.info(f"[COLLECT_INFO] Response: '{response_text}'")
         return await self._voice_response(response_text)
     
     async def _create_order(self, context: ConversationContext) -> Dict[str, str]:
         """Create the final order"""
         try:
+            logger.info(f"[CREATE_ORDER] Starting order creation")
+            logger.info(f"[CREATE_ORDER] Customer info: name='{context.customer_info.name}', phone='{context.customer_info.phone}', address='{context.customer_info.address}'")
+            logger.info(f"[CREATE_ORDER] Cart token: '{context.cart_token}'")
+            
             if not context.is_customer_info_complete():
+                logger.error(f"[CREATE_ORDER] Customer info incomplete!")
                 return await self._voice_response("Necesito tu información completa para procesar el pedido.")
             
+            logger.info(f"[CREATE_ORDER] Customer info complete, calling pizza_api.create_order")
             order_result = await pizza_api.create_order(
                 cart_token=context.cart_token,
                 customer_name=context.customer_info.name,
@@ -286,6 +281,8 @@ class ConversationManager:
                 customer_address=context.customer_info.address,
                 payment_method=context.customer_info.payment_method
             )
+            
+            logger.info(f"[CREATE_ORDER] Order result: {order_result}")
             
             if order_result:
                 order_id = order_result["data"]["id"]
