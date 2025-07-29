@@ -30,9 +30,10 @@ class TranscribeService:
         try:
             logger.info(f"Starting Whisper transcription from URL: {audio_url}")
             
-            # Download audio file
+            # Download audio file with Twilio authentication
+            auth = (settings.twilio_account_sid, settings.twilio_auth_token)
             async with httpx.AsyncClient() as client:
-                response = await client.get(audio_url)
+                response = await client.get(audio_url, auth=auth)
                 response.raise_for_status()
                 
                 # Save to temporary file
