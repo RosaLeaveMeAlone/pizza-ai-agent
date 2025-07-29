@@ -40,8 +40,11 @@ class PizzaOrderParser(BaseOutputParser):
                 elif line.startswith('[RESPUESTA:') or line.startswith('[RESPONSE:'):
                     response_text = line.split(':', 1)[1].strip().rstrip(']')
             
-            # Si no se encontró respuesta, usar solo las líneas sin etiquetas
-            if response_text == "¿Puedes repetir tu pedido, por favor?":
+            # Limpiar respuesta de etiquetas residuales
+            response_text = response_text.replace('[ACCIÓN: welcome]', '').replace('[ACCIÓN: add_product]', '').replace('[ACCIÓN: clarification]', '').replace('[ACCIÓN: error]', '').strip()
+            
+            # Si queda vacío, usar líneas sin etiquetas
+            if not response_text or response_text == "¿Puedes repetir tu pedido, por favor?":
                 clean_lines = []
                 for line in lines:
                     line = line.strip()
@@ -49,6 +52,8 @@ class PizzaOrderParser(BaseOutputParser):
                         clean_lines.append(line)
                 if clean_lines:
                     response_text = ' '.join(clean_lines)
+                else:
+                    response_text = "¿Puedes repetir tu pedido, por favor?"
             
             return {
                 "action": action,
@@ -74,11 +79,11 @@ class LangchainService:
     
     def __init__(self):
         self.llm = ChatOpenAI(
-            model_name="gpt-3.5-turbo",
+            model_name="gpt-4o-mini",
             temperature=0.5,
             max_tokens=300,
             openai_api_key=settings.openai_api_key,
-            streaming=True
+            streaming=False
         )
         self.parser = PizzaOrderParser()
         self.memories: Dict[str, ConversationBufferMemory] = {}

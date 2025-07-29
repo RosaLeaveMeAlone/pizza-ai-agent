@@ -19,7 +19,7 @@ class ConversationManager:
             temperature=0.1,
             max_tokens=200,
             openai_api_key=settings.openai_api_key,
-            streaming=True
+            streaming=False
         )
     
     async def process_customer_message(
