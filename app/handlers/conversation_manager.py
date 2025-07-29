@@ -15,9 +15,9 @@ class ConversationManager:
     def __init__(self):
         self.active_conversations: Dict[str, ConversationContext] = {}
         self.extractor_llm = ChatOpenAI(
-            model_name="gpt-4",
+            model_name="gpt-3.5-turbo",
             temperature=0.1,
-            max_tokens=300,
+            max_tokens=200,
             openai_api_key=settings.openai_api_key
         )
     

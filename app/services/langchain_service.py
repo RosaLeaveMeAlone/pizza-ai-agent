@@ -64,9 +64,9 @@ class LangchainService:
     
     def __init__(self):
         self.llm = ChatOpenAI(
-            model_name="gpt-4",
+            model_name="gpt-3.5-turbo",
             temperature=0.7,
-            max_tokens=500,
+            max_tokens=250,
             openai_api_key=settings.openai_api_key
         )
         self.parser = PizzaOrderParser()
