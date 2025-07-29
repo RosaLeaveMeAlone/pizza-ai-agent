@@ -11,6 +11,8 @@ import tempfile
 import os
 from collections import defaultdict
 import io
+import audioop
+import wave
 
 
 class MediaStreamHandler:
@@ -103,11 +105,25 @@ class MediaStreamHandler:
             # Clear buffer for next chunk
             self.audio_buffers[call_sid] = io.BytesIO()
             
-            # Save to temporary WAV file (convert from mulaw)
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-                # Convert mulaw to wav (this is simplified - you might need proper conversion)
-                temp_file.write(audio_data)
-                temp_file_path = temp_file.name
+            # Convert mulaw to PCM WAV format
+            # Twilio sends mulaw at 8kHz, 8-bit
+            try:
+                # Convert mulaw to 16-bit PCM
+                pcm_data = audioop.ulaw2lin(audio_data, 2)
+                
+                # Create WAV file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                    temp_file_path = temp_file.name
+                    
+                with wave.open(temp_file_path, 'wb') as wav_file:
+                    wav_file.setnchannels(1)  # Mono
+                    wav_file.setsampwidth(2)  # 16-bit
+                    wav_file.setframerate(8000)  # 8kHz sample rate
+                    wav_file.writeframes(pcm_data)
+                    
+            except Exception as e:
+                logger.error(f"Error converting audio format for call {call_sid}: {str(e)}")
+                return
                 
             try:
                 # Transcribe with Whisper
@@ -163,11 +179,18 @@ class MediaStreamHandler:
                 logger.warning(f"No stream SID for call: {call_sid}")
                 return
                 
-            # Generate audio with Polly
+            # Generate audio with Polly (returns PCM WAV)
             audio_bytes = await polly_service.synthesize_speech(text)
             
-            # Convert to base64 for WebSocket transmission
-            audio_base64 = base64.b64encode(audio_bytes).decode('utf-8')
+            # Convert PCM to mulaw for Twilio
+            # Assuming Polly returns 16-bit PCM at 22kHz, we need to convert to 8kHz mulaw
+            try:
+                # Convert 16-bit PCM to mulaw (simplified - may need proper resampling)
+                mulaw_data = audioop.lin2ulaw(audio_bytes, 2)
+                audio_base64 = base64.b64encode(mulaw_data).decode('utf-8')
+            except Exception as e:
+                logger.error(f"Error converting response audio to mulaw: {str(e)}")
+                return
             
             # Send audio via WebSocket
             media_message = {
