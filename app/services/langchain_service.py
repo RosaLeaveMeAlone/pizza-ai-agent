@@ -74,7 +74,7 @@ class LangchainService:
     
     def __init__(self):
         self.llm = ChatOpenAI(
-            model_name="gpt-4o",
+            model_name="gpt-4o-mini",
             temperature=0.5,
             max_tokens=400,
             openai_api_key=settings.openai_api_key

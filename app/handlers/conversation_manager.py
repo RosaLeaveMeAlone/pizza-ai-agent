@@ -359,7 +359,7 @@ Important: Extract ALL digits from phone numbers regardless of spaces.
             <Response>
                 <Say language="es-ES">{text}</Say>
                 <Gather input="speech" action="/voice/process-speech" method="POST" 
-                        speechTimeout="5" language="es-ES">
+                        speechTimeout="10" language="es-ES">
                 </Gather>
                 <Say language="es-ES">No pude escucharte. ¿Puedes repetir?</Say>
                 <Redirect>/voice/incoming</Redirect>
