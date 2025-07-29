@@ -17,7 +17,7 @@ class ConversationManager:
         self.extractor_llm = ChatOpenAI(
             model_name="gpt-3.5-turbo",
             temperature=0.1,
-            max_tokens=200,
+            max_tokens=100,
             openai_api_key=settings.openai_api_key,
             streaming=False
         )
