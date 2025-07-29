@@ -139,8 +139,8 @@ class ConversationManager:
                 return await self._voice_response("Parece que tenemos dificultades. Te transfiero con un operador humano.")
             return await self._voice_response(response_text)
         
-        else:  # error
-            return await self._error_response(response_text)
+        else:  # error - but don't hang up, just respond
+            return await self._voice_response(response_text)
     
     async def _add_product_to_cart(self, context: ConversationContext, ai_result: Dict) -> bool:
         """Add product to cart based on AI parsing"""
@@ -358,9 +358,9 @@ Important: Extract ALL digits from phone numbers regardless of spaces.
             twiml = f'''
             <Response>
                 <Say language="es-ES">{text}</Say>
-                <Record timeout="10" action="/voice/process-recording" method="POST" 
-                        recordingStatusCallback="/voice/recording-status" 
-                        maxLength="30" playBeep="false"/>
+                <Gather input="speech" action="/voice/process-speech" method="POST" 
+                        speechTimeout="10" language="es-ES">
+                </Gather>
                 <Say language="es-ES">No pude escucharte. ¿Puedes repetir?</Say>
                 <Redirect>/voice/incoming</Redirect>
             </Response>
