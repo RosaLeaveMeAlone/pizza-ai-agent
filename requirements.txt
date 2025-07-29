@@ -27,7 +27,6 @@ requests==2.31.0
 pydub==0.25.1
 soundfile==0.12.1
 numpy==1.24.3
-audioop
 
 # Environment and configuration
 python-dotenv==1.0.0
