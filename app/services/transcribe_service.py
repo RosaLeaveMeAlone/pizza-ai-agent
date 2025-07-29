@@ -1,130 +1,64 @@
-import boto3
-import asyncio
-import uuid
-import time
+import httpx
+import tempfile
+import os
+from openai import OpenAI
 from loguru import logger
-from app.services.aws_config import aws_config
+from app.config.settings import settings
 from typing import Optional
 
 class TranscribeService:
-    """Amazon Transcribe speech-to-text service"""
+    """OpenAI Whisper speech-to-text service"""
     
     def __init__(self):
-        self.client = aws_config.get_transcribe_client()
-        self.s3_client = aws_config.get_s3_client()
+        self.client = OpenAI(api_key=settings.openai_api_key)
         
     async def transcribe_audio_from_url(
         self, 
         audio_url: str,
-        language_code: str = "es-ES"
+        language_code: str = "es"
     ) -> Optional[str]:
         """
-        Transcribe audio from a URL (Twilio recording)
+        Transcribe audio from a URL using OpenAI Whisper
         
         Args:
             audio_url: URL to audio file
-            language_code: Language for transcription
+            language_code: Language for transcription (ISO 639-1 format)
             
         Returns:
             Transcribed text or None if error
         """
         try:
-            job_name = f"pizza-transcription-{uuid.uuid4()}"
+            logger.info(f"Starting Whisper transcription from URL: {audio_url}")
             
-            logger.info(f"Starting transcription job: {job_name}")
-            
-            # Start transcription job
-            response = self.client.start_transcription_job(
-                TranscriptionJobName=job_name,
-                Media={'MediaFileUri': audio_url},
-                MediaFormat='wav',
-                LanguageCode=language_code,
-                Settings={
-                    'ShowSpeakerLabels': False,
-                    'MaxSpeakerLabels': 1
-                }
-            )
-            
-            return await self._wait_for_transcription(job_name)
-            
-        except Exception as e:
-            logger.error(f"Error starting transcription: {str(e)}")
-            return None
-    
-    async def _wait_for_transcription(self, job_name: str, max_wait: int = 60) -> Optional[str]:
-        """
-        Wait for transcription job to complete
-        
-        Args:
-            job_name: Name of the transcription job
-            max_wait: Maximum seconds to wait
-            
-        Returns:
-            Transcribed text or None if error/timeout
-        """
-        try:
-            start_time = time.time()
-            
-            while time.time() - start_time < max_wait:
-                response = self.client.get_transcription_job(
-                    TranscriptionJobName=job_name
-                )
-                
-                status = response['TranscriptionJob']['TranscriptionJobStatus']
-                
-                if status == 'COMPLETED':
-                    transcript_uri = response['TranscriptionJob']['Transcript']['TranscriptFileUri']
-                    return await self._extract_transcript_text(transcript_uri)
-                    
-                elif status == 'FAILED':
-                    failure_reason = response['TranscriptionJob'].get('FailureReason', 'Unknown')
-                    logger.error(f"Transcription failed: {failure_reason}")
-                    return None
-                
-                await asyncio.sleep(2)
-            
-            logger.warning(f"Transcription job {job_name} timed out")
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error waiting for transcription: {str(e)}")
-            return None
-    
-    async def _extract_transcript_text(self, transcript_uri: str) -> Optional[str]:
-        """
-        Extract text from transcription result JSON
-        
-        Args:
-            transcript_uri: URI to transcription result
-            
-        Returns:
-            Extracted text or None if error
-        """
-        try:
-            import httpx
-            
+            # Download audio file
             async with httpx.AsyncClient() as client:
-                response = await client.get(transcript_uri)
-                result = response.json()
+                response = await client.get(audio_url)
+                response.raise_for_status()
                 
-                transcripts = result.get('results', {}).get('transcripts', [])
-                if transcripts:
-                    text = transcripts[0].get('transcript', '')
-                    logger.info(f"Transcription result: '{text}'")
-                    return text.strip()
+                # Save to temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+                    temp_file.write(response.content)
+                    temp_file_path = temp_file.name
+            
+            try:
+                # Transcribe with Whisper
+                with open(temp_file_path, 'rb') as audio_file:
+                    transcript = self.client.audio.transcriptions.create(
+                        model="whisper-1",
+                        file=audio_file,
+                        language=language_code
+                    )
                 
-                logger.warning("No transcript found in result")
-                return None
+                text = transcript.text.strip()
+                logger.info(f"Whisper transcription result: '{text}'")
+                return text
                 
+            finally:
+                # Clean up temporary file
+                os.unlink(temp_file_path)
+            
         except Exception as e:
-            logger.error(f"Error extracting transcript: {str(e)}")
+            logger.error(f"Error with Whisper transcription: {str(e)}")
             return None
-    
-    async def transcribe_real_time_stream(self, audio_stream):
-        """
-        TODO: Implement real-time transcription for live calls
-        This would use Amazon Transcribe Streaming API
-        """
-        pass
 
 transcribe_service = TranscribeService()

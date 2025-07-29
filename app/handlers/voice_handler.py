@@ -5,6 +5,7 @@ from loguru import logger
 from typing import Optional
 from app.handlers.conversation_manager import conversation_manager
 from app.services.langchain_service import langchain_service
+from app.services.transcribe_service import transcribe_service
 
 voice_router = APIRouter()
 
@@ -69,6 +70,69 @@ async def process_speech(
                     language='es-ES')
         response.hangup()
         return Response(content=str(response), media_type="application/xml")
+
+@voice_router.post("/process-recording")
+async def process_recording(
+    request: Request,
+    RecordingUrl: Optional[str] = Form(None),
+    CallSid: Optional[str] = Form(None)
+):
+    """Process audio recording using Whisper"""
+    try:
+        logger.info(f"Processing recording from {CallSid}: {RecordingUrl}")
+        
+        if not RecordingUrl or not CallSid:
+            logger.warning("Missing recording URL or call SID")
+            
+            response = VoiceResponse()
+            response.say("No pude recibir tu grabación. ¿Puedes repetir?", 
+                        language='es-ES')
+            response.redirect('/voice/incoming')
+            return Response(content=str(response), media_type="application/xml")
+        
+        # Transcribe with Whisper
+        transcribed_text = await transcribe_service.transcribe_audio_from_url(RecordingUrl)
+        
+        if not transcribed_text:
+            logger.warning("Failed to transcribe audio")
+            
+            response = VoiceResponse()
+            response.say("No pude entender lo que dijiste. ¿Puedes repetir?", 
+                        language='es-ES')
+            response.redirect('/voice/incoming')
+            return Response(content=str(response), media_type="application/xml")
+        
+        # Process the transcribed text
+        result = await conversation_manager.process_customer_message(
+            CallSid, 
+            transcribed_text
+        )
+        
+        return Response(content=result["twiml"], media_type="application/xml")
+        
+    except Exception as e:
+        logger.error(f"Error processing recording: {str(e)}")
+        
+        response = VoiceResponse()
+        response.say("Hubo un error procesando tu grabación. Por favor, intenta de nuevo.", 
+                    language='es-ES')
+        response.hangup()
+        return Response(content=str(response), media_type="application/xml")
+
+@voice_router.post("/recording-status")
+async def recording_status(request: Request):
+    """Handle recording status updates"""
+    try:
+        form_data = await request.form()
+        recording_status = form_data.get("RecordingStatus")
+        call_sid = form_data.get("CallSid")
+        
+        logger.info(f"Recording {call_sid} status: {recording_status}")
+        return {"status": "received"}
+        
+    except Exception as e:
+        logger.error(f"Error handling recording status: {str(e)}")
+        return {"status": "error"}
 
 @voice_router.post("/status")
 async def call_status(request: Request):
