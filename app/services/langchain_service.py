@@ -22,7 +22,7 @@ class PizzaOrderParser(BaseOutputParser):
             product = None
             size = None
             quantity = 1
-            response_text = text
+            response_text = "¿Puedes repetir tu pedido, por favor?"
             
             for line in lines:
                 line = line.strip()
@@ -39,6 +39,16 @@ class PizzaOrderParser(BaseOutputParser):
                         quantity = 1
                 elif line.startswith('[RESPUESTA:') or line.startswith('[RESPONSE:'):
                     response_text = line.split(':', 1)[1].strip().rstrip(']')
+            
+            # Si no se encontró respuesta, usar solo las líneas sin etiquetas
+            if response_text == "¿Puedes repetir tu pedido, por favor?":
+                clean_lines = []
+                for line in lines:
+                    line = line.strip()
+                    if not (line.startswith('[') and ']:' in line):
+                        clean_lines.append(line)
+                if clean_lines:
+                    response_text = ' '.join(clean_lines)
             
             return {
                 "action": action,
@@ -65,7 +75,7 @@ class LangchainService:
     def __init__(self):
         self.llm = ChatOpenAI(
             model_name="gpt-3.5-turbo",
-            temperature=0.7,
+            temperature=0.5,
             max_tokens=400,
             openai_api_key=settings.openai_api_key
         )
