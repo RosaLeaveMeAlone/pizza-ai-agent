@@ -17,8 +17,9 @@ class ConversationManager:
         self.extractor_llm = ChatOpenAI(
             model_name="gpt-3.5-turbo",
             temperature=0.1,
-            max_tokens=350,
-            openai_api_key=settings.openai_api_key
+            max_tokens=200,
+            openai_api_key=settings.openai_api_key,
+            streaming=True
         )
     
     async def process_customer_message(
